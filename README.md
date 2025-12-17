@@ -1,2 +1,2 @@
 # mbte
-minimal back-testing engine
+Minimal Back-Testing Engine
