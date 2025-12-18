@@ -1,29 +1,23 @@
 # Generate simulated prices
-# flavors of simulation supported include the following
-# 1. flat price
-# 2. 
 
-import itertools
 import math
+import random
 
-from mbte.statistics import GeometricBrownianMotionParameters
-
-
-def generate_flat(price, num):
-    return list(itertools.repeat(price, num))
+from mbte.statistics import GBMParameters
 
 
-def generate_random_walk(
-        init_price: float, num: int, params: GeometricBrownianMotionParameters
+def generate_gbm_price(
+        init_price: float, num: int, gbm_params: GBMParameters, rng: random.Random
 ):
     ret = [init_price]
+    log_returns = []
     current_price = init_price
+    dt = 1
     for _ in range(num - 1):
-        current_price = params.next_value(current_price, 1)
+        r = gbm_params.generate_log_return(dt, rng)
+        log_returns.append(r)
+        current_price = current_price * math.exp(r)
         ret.append(current_price)
     return ret
 
-
-def generate_mean_reversion():
-    pass
 

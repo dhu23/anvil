@@ -3,19 +3,27 @@ import random
 import math
 
 @dataclass(frozen=True)
-class GeometricBrownianMotionParameters:
+class GBMParameters:
     mu: float
     sigma: float
 
     def __post_init__(self):
+        if self.mu is None or self.sigma is None:
+            raise ValueError("parameters cannot be None")
+
         if self.sigma <= 0.0:
             raise ValueError("sigma must be positive")
 
-    def generate(self, dt):
+    def generate_log_return(self, dt: float, rng: random.Random):
         '''
-        generates ln(P_1) - ln(P_0) = mu * dt + sigma * sqrt(dt) * epsilon
+        generates log return:
+        ln(P_1/P_0)  = ln(P_1) - ln(P_0)
+                     = (mu - sigma**2 / 2) * dt + sigma * sqrt(dt) * epsilon
+        where
+            1. don't forgot the drift corection term
+            2. epsilon ~ N(0, 1)
         '''
-        return self.mu * dt + self.sigma * math.sqrt(dt) * random.gauss()
- 
-    def next_value(self, current_value, dt):
-        return current_value * math.exp(self.generate(dt))
+        return (
+            (self.mu - self.sigma**2 / 2) * dt 
+            + self.sigma * math.sqrt(dt) * rng.gauss(0.0, 1.0)
+        )
