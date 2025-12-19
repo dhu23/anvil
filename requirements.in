@@ -1,4 +1,17 @@
+# Core dependencies
 numpy
 pandas
 matplotlib
 scipy
+
+# Visualization
+seaborn
+
+# For notebook 
+jupyter
+notebook
+ipykernel
+matplotlib-inline
+
+# Testing/dev tools
+pytest
