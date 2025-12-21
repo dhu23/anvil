@@ -20,6 +20,14 @@ class GBMParameters:
             raise ValueError("sigma must be positive")
 
 
+def gbm_log_return_mean(gbm_params: GBMParameters, dt: float):
+    return (gbm_params.mu - gbm_params.sigma**2 / 2) * dt
+
+
+def gbm_log_return_std(gbm_params: GBMParameters, dt: float):
+    return gbm_params.sigma * math.sqrt(dt)
+
+
 def log_returns(gbm_params: GBMParameters, n: int, dt: float, rng):
     '''
     generates a total count of n i.i.d log return:
@@ -30,7 +38,7 @@ def log_returns(gbm_params: GBMParameters, n: int, dt: float, rng):
         2. epsilon ~ N(0, 1)
     '''
     return rng.normal(
-        loc=(gbm_params.mu - gbm_params.sigma**2 / 2) * dt,
-        scale=gbm_params.sigma * math.sqrt(dt),
+        loc=gbm_log_return_mean(gbm_params, dt),
+        scale=gbm_log_return_std(gbm_params, dt),
         size=n,
     )
