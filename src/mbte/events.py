@@ -1,23 +1,11 @@
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-
-
-class EventType(Enum):
-    MARKET_OPEN = "MD-Open"
-    MARKET_CLOSE = "MD-close"
-
-    SIGNAL = "Signal"
-
-    ORDER_NEW = "OrderNew"
-    ORDER_FILL = "OrderFill"
 
 
 @dataclass(frozen=True)
 class Event:
     timestamp: datetime
     symbol: str
-    etype: EventType
 
 
 ################# Market Events ##################
@@ -37,19 +25,29 @@ class MarketCloseEvent(Event):
 ###################### Signal ######################
 
 @dataclass(frozen=True)
-class Signal(Event):
+class SignalEvent(Event):
     value: float
 
 
 ##################### Execution ######################
 
 @dataclass(frozen=True)
-class OrderNew(Event):
-    price: float
+class OrderEvent(Event):
+    price: float | None
     qty: int
 
 
 @dataclass(frozen=True)
-class OrderFill(Event):
+class FillEvent(Event):
     last_price: float
     last_qty: int
+
+
+############## Internal Scheduling ###################
+
+@dataclass(frozen=True)
+class InternalSchedulingEvent(Event):
+    '''
+    This is used as an internal scheduling event base class
+    '''
+    pass
