@@ -13,22 +13,27 @@ class GBMParameters:
     sigma: float
 
     def __post_init__(self):
-        if self.mu is None or self.sigma is None:
-            raise ValueError("parameters cannot be None")
+        if not isinstance(self.mu, float) or not isinstance(self.sigma, float):
+            raise ValueError("parameters have to be float")
 
         if self.sigma <= 0.0:
             raise ValueError("sigma must be positive")
 
 
-def gbm_log_return_mean(gbm_params: GBMParameters, dt: float):
+def gbm_log_return_mean(gbm_params: GBMParameters, dt: float) -> float:
     return (gbm_params.mu - gbm_params.sigma**2 / 2) * dt
 
 
-def gbm_log_return_std(gbm_params: GBMParameters, dt: float):
+def gbm_log_return_std(gbm_params: GBMParameters, dt: float) -> float:
     return gbm_params.sigma * math.sqrt(dt)
 
 
-def log_returns(gbm_params: GBMParameters, n: int, dt: float, rng):
+def log_returns(
+        gbm_params: GBMParameters, 
+        n: int, 
+        dt: float, 
+        rng: np.random.Generator
+) -> np.ndarray:
     '''
     generates a total count of n i.i.d log return:
     ln(P_1/P_0) = ln(P_1) - ln(P_0)
