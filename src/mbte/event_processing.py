@@ -27,8 +27,8 @@ class MbtePriorityQueue(Generic[K, V]):
         self._queue: list[tuple[K, int, V]] = []
 
     def add(self, key: K, value: V):
+        self._seq += 1 # leave the init_seq untouched
         heapq.heappush(self._queue, (key, self._seq, value))
-        self._seq += 1
 
     def pop(self) -> tuple[K, int, V] | None:
         if self._queue:
@@ -98,10 +98,6 @@ class EventStoreItem(NamedTuple):
 class ScheduledItem(NamedTuple):
     event: Event
     schedule_id: int
-
-
-class EventSequencerError(RuntimeError):
-    pass
 
 
 class EventScheduler(ABC):
@@ -190,10 +186,7 @@ class EventSequencer(EventScheduler):
 
     def _init_queue(self):
         for event_store in self._event_stores:
-            if not self._replenish_from_store(event_store):
-                raise EventSequencerError(
-                    f'no event in event store {event_store.name()}'
-                )
+            self._replenish_from_store(event_store)
             
     def _remove_scheduled_id(self, schedule_id: int) -> bool:
         if schedule_id in self._scheduled_id_set:
@@ -220,8 +213,17 @@ class EventSequencer(EventScheduler):
         return ret
 
     def advance(self) -> bool:
-        assert self._event_processor is not None
+        '''
+        advance() does not necessarily process an event. If it encounters
+        canceled scheduled event, it skips it in this iteration without 
+        invoking event_processor
         
+        :param self: Description
+        :return: Description
+        :rtype: bool
+        '''
+        assert self._event_processor is not None
+
         head = self._merger_queue.pop()
         if head is None:
             return False

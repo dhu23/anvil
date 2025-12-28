@@ -24,25 +24,25 @@ class TestMbtePriorityQueue(object):
 
         # add node
         pq.add(1, "value 1")
-        assert pq.peek() == (1, 0, "value 1")
+        assert pq.peek() == (1, 1, "value 1")
 
         pq.add(0, "value 0")
-        assert pq.peek() == (0, 1, "value 0")
+        assert pq.peek() == (0, 2, "value 0")
 
         pq.add(2, "value 2")
-        assert pq.peek() == (0, 1, "value 0")
+        assert pq.peek() == (0, 2, "value 0")
 
         pq.add(2, "value 22")
-        assert pq.peek() == (0, 1, "value 0")
+        assert pq.peek() == (0, 2, "value 0")
 
         pq.add(0, "value 00")
-        assert pq.peek() == (0, 1, "value 0")
+        assert pq.peek() == (0, 2, "value 0")
         
-        assert (0, 1, "value 0") == self._assert_pop(pq)
-        assert (0, 4, "value 00") == self._assert_pop(pq)
-        assert (1, 0, "value 1") == self._assert_pop(pq)
-        assert (2, 2, "value 2") == self._assert_pop(pq)
-        assert (2, 3, "value 22") == self._assert_pop(pq)
+        assert (0, 2, "value 0") == self._assert_pop(pq)
+        assert (0, 5, "value 00") == self._assert_pop(pq)
+        assert (1, 1, "value 1") == self._assert_pop(pq)
+        assert (2, 3, "value 2") == self._assert_pop(pq)
+        assert (2, 4, "value 22") == self._assert_pop(pq)
 
 
 class MockEventStore(EventStore):
