@@ -1,12 +1,16 @@
 # Generate simulated prices
-from collections import namedtuple
+
+from typing import NamedTuple
 import numpy as np
 import mbte.gbm as gbm
 
-SimulatedPrices = namedtuple("SimulatedPrices", ["log_returns", "prices"])
+
+class SimulatedPrices(NamedTuple):
+    log_returns: np.ndarray
+    prices: np.ndarray
 
 
-def simulate_prices(init_price: float, log_returns):
+def simulate_prices(init_price: float, log_returns: np.ndarray):
     '''
     Let the log returns be r1, r2, r3, ...
     Let the initial price be S0, 
@@ -21,6 +25,10 @@ def simulate_prices(init_price: float, log_returns):
 
 
 def simulate_gbm(
-        gbm_params: gbm.GBMParameters, init_price: float, n: int, dt: float, rng
+        gbm_params: gbm.GBMParameters,
+        init_price: float, 
+        n: int, 
+        dt: float, 
+        rng: np.random.Generator,
 ):
     return simulate_prices(init_price, gbm.log_returns(gbm_params, n, dt, rng))

@@ -80,7 +80,7 @@ class EventStore(ABC):
 
 class EventProcessor(ABC):
     @abstractmethod
-    def process(self, event: Event):
+    def process(self, event: Event) -> None:
         pass
 
 
@@ -98,7 +98,17 @@ class EventSequencerError(RuntimeError):
     pass
 
 
-class EventSequencer(object):
+class EventScheduler(ABC):
+    @abstractmethod
+    def schedule(self, internal_event: InternalSchedulingEvent) -> int:
+        pass
+
+    @abstractmethod
+    def cancel(self, schedule_id: int) -> bool:
+        pass
+
+
+class EventSequencer(EventScheduler):
     '''
     EventSequencer manages multiple EventStore objects and presents produced
     events in the system in a properly sorted way, by sequence number, 
@@ -151,11 +161,17 @@ class EventSequencer(object):
 
         self._init_queue()
 
-    def schedule(self) -> int:
-        raise RuntimeError("not implemented")
+    def schedule(self, internal_event: InternalSchedulingEvent) -> int:
+        schedule_id = self._get_schedule_id()
+        self._merger_queue.add(
+            internal_event.timestamp,
+            ScheduledItem(event=internal_event, schedule_id=schedule_id),
+        )
+        self._scheduled_id_set.add(schedule_id)
+        return schedule_id
     
     def cancel(self, schedule_id: int) -> bool:
-        raise RuntimeError("not implemented")
+        return self._remove_scheduled_id(schedule_id)
 
     def run(self):
         # keep running event by event util it is done
@@ -168,9 +184,16 @@ class EventSequencer(object):
                 raise EventSequencerError(
                     f'no event in event store {event_store.name()}'
                 )
+            
+    def _remove_scheduled_id(self, schedule_id: int) -> bool:
+        if schedule_id in self._scheduled_id_set:
+            self._scheduled_id_set.remove(schedule_id)
+            return True
+        else:
+            return False
 
     def _replenish_from_store(self, event_store: EventStore) -> bool:
-        head = event_store.pop()
+        head = event_store.peek()
         if head is None:
             return False
         
@@ -185,12 +208,6 @@ class EventSequencer(object):
         ret = self._internal_scheduling_id
         self._internal_scheduling_id += 1
         return ret
-    
-    def _schedule(self, event: InternalSchedulingEvent):
-        self._merger_queue.add(
-            event.timestamp,
-            ScheduledItem(event=event, schedule_id=self._get_schedule_id())
-        )
 
     def run_once(self) -> bool:
         head = self._merger_queue.pop()
@@ -198,16 +215,24 @@ class EventSequencer(object):
             return False
         
         timestamp, item = head
+        if isinstance(item, ScheduledItem):
+            # if the scheduled_id is still effective, then run it
+            if item.schedule_id in self._scheduled_id_set:
+                self._advance_clock(timestamp)
+                self._event_processor.process(item.event)
+                self._remove_scheduled_id(item.schedule_id)
+            return True
+        else: # isinstance(item, EventStoreItem)
+            # process the event (still in the queue) and remove it
+            self._advance_clock(timestamp)
+            self._event_processor.process(item.event)
+            item.event_store.pop()
 
+            # prepare the next event in the queue, without removing it
+            self._replenish_from_store(item.event_store)
+            return True
+
+    def _advance_clock(self, timestamp: datetime) -> None:
         # advance time if it sees a newer timestamp
         if self._sim_clock.now() < timestamp:
             self._sim_clock.set_time(timestamp)
-            
-        if isinstance(item, ScheduledItem):
-            self._event_processor.process(item.event)
-            self._scheduled_id_set.remove(item.schedule_id)
-            return True
-        else: # isinstance(item, EventStoreItem)
-            self._event_processor.process(item.event)
-            self._replenish_from_store(item.event_store)
-            return True

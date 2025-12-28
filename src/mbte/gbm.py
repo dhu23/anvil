@@ -12,13 +12,6 @@ class GBMParameters:
     mu: float
     sigma: float
 
-    def __post_init__(self):
-        if not isinstance(self.mu, float) or not isinstance(self.sigma, float):
-            raise ValueError("parameters have to be float")
-
-        if self.sigma <= 0.0:
-            raise ValueError("sigma must be positive")
-
 
 def gbm_log_return_mean(gbm_params: GBMParameters, dt: float) -> float:
     return (gbm_params.mu - gbm_params.sigma**2 / 2) * dt
