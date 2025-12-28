@@ -13,24 +13,30 @@ V = TypeVar('V')
 
 class MbtePriorityQueue(Generic[K, V]):
     '''
-    Docstring for MbtePriorityQueue
-    
-    :var Illustration: Description
+    A wrapper around python native heap queue. 
+    A monotonic sequence number is used to break key tie.
+
+    :var streams: Description
+    :var Data: Description
+    :var Data: Description
+    :var scheduling: Description
     :var Implementation: Description
     '''
-    def __init__(self):
-        self._queue: list[tuple[K, V]] = []
+    def __init__(self, init_seq: int=0):
+        self._seq = init_seq
+        self._queue: list[tuple[K, int, V]] = []
 
     def add(self, key: K, value: V):
-        heapq.heappush(self._queue, (key, value))
+        heapq.heappush(self._queue, (key, self._seq, value))
+        self._seq += 1
 
-    def pop(self) -> tuple[K, V] | None:
+    def pop(self) -> tuple[K, int, V] | None:
         if self._queue:
             return heapq.heappop(self._queue)
         else:
             return None
         
-    def peek(self) -> tuple[K, V] | None:
+    def peek(self) -> tuple[K, int, V] | None:
         if self._queue:
             return self._queue[0]
         else:
@@ -149,17 +155,19 @@ class EventSequencer(EventScheduler):
             self,
             sim_clock: SimulationClock, 
             event_stores: list[EventStore], 
-            event_processor: EventProcessor
     ):
         self._sim_clock = sim_clock
         self._event_stores = list(event_stores)
-        self._event_processor = event_processor
+        self._event_processor: EventProcessor | None = None
 
         self._merger_queue = MbtePriorityQueue[datetime, EventStoreItem | ScheduledItem]()
         self._internal_scheduling_id: int = 1
         self._scheduled_id_set: set[int] = set()
 
         self._init_queue()
+
+    def set_processor(self, event_processor: EventProcessor):
+        self._event_processor = event_processor
 
     def schedule(self, internal_event: InternalSchedulingEvent) -> int:
         schedule_id = self._get_schedule_id()
@@ -175,7 +183,7 @@ class EventSequencer(EventScheduler):
 
     def run(self):
         # keep running event by event util it is done
-        while self.run_once():
+        while self.advance():
             pass
 
     def _init_queue(self):
@@ -209,12 +217,12 @@ class EventSequencer(EventScheduler):
         self._internal_scheduling_id += 1
         return ret
 
-    def run_once(self) -> bool:
+    def advance(self) -> bool:
         head = self._merger_queue.pop()
         if head is None:
             return False
         
-        timestamp, item = head
+        timestamp, _, item = head
         if isinstance(item, ScheduledItem):
             # if the scheduled_id is still effective, then run it
             if item.schedule_id in self._scheduled_id_set:

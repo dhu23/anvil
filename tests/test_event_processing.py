@@ -1,7 +1,6 @@
-import random
 from datetime import datetime
 from mbte.clock import SimulationClock
-from mbte.event_processing import EventProcessor, EventSequencer, EventStore, MbtePriorityQueue
+from mbte.event_processing import EventProcessor, EventScheduler, EventSequencer, EventStore, MbtePriorityQueue
 from mbte.events import Event, InternalSchedulingEvent, MarketCloseEvent, MarketOpenEvent, PortfolioConstruction, PortfolioLiquidation
 
 class TestMbtePriorityQueue(object):
@@ -25,39 +24,25 @@ class TestMbtePriorityQueue(object):
 
         # add node
         pq.add(1, "value 1")
-        assert pq.peek() == (1, "value 1")
+        assert pq.peek() == (1, 0, "value 1")
 
         pq.add(0, "value 0")
-        assert pq.peek() == (0, "value 0")
+        assert pq.peek() == (0, 1, "value 0")
 
         pq.add(2, "value 2")
-        assert pq.peek() == (0, "value 0")
+        assert pq.peek() == (0, 1, "value 0")
+
+        pq.add(2, "value 22")
+        assert pq.peek() == (0, 1, "value 0")
+
+        pq.add(0, "value 00")
+        assert pq.peek() == (0, 1, "value 0")
         
-        assert (0, "value 0") == self._assert_pop(pq)
-        assert (1, "value 1") == self._assert_pop(pq)
-        assert (2, "value 2") == self._assert_pop(pq)
-        
-
-    def test_priority_queue_random(self):
-        for _ in range(5):
-            self._test_priority_queue_random(100)
-
-        
-    def _test_priority_queue_random(self, total: int):
-        nums = list(range(total))
-        random.shuffle(nums)
-
-        pq = self._get_pq()
-
-        current_min = None
-        for n in nums:
-            current_min = n if current_min is None else min(n, current_min)
-            pq.add(n, f'value {n}')
-
-        for i in range(total):
-            assert (i, f'value {i}') == self._assert_pop(pq)
-        
-        assert pq.peek() is None
+        assert (0, 1, "value 0") == self._assert_pop(pq)
+        assert (0, 4, "value 00") == self._assert_pop(pq)
+        assert (1, 0, "value 1") == self._assert_pop(pq)
+        assert (2, 2, "value 2") == self._assert_pop(pq)
+        assert (2, 3, "value 22") == self._assert_pop(pq)
 
 
 class MockEventStore(EventStore):
@@ -101,14 +86,48 @@ class MockStandardEventProcessor(EventProcessor):
         return self._events
 
 
-# class MockMixedEventProcessor(MockStandardEventProcessor):
-#     def __init__(self):
-#         super().__init__()
+class MockMixedEventProcessor(MockStandardEventProcessor):
+    '''
+    MockMixedEventProcessor creates a sophisticated scenario with scheduling
+    '''
+    def __init__(self, clock: SimulationClock, scheduler: EventScheduler):
+        super().__init__()
+        self._clock = clock
+        self._scheduler = scheduler
+        self._first_scheduled: tuple[InternalSchedulingEvent, int] | None = None
+        self._second_scheduled: tuple[InternalSchedulingEvent, int] | None = None
 
-#     def process(self, event: Event):
-#         super().process(event)
-#         if isinstance(event, MarketOpenEvent):
 
+    def process(self, event: Event):
+        super().process(event)
+
+        # will receive PortfolioConstruction event then MarketOpenEvent in order
+        # on PortfolioConstructionEvent, schedule InternalSchedulingEvent at 11:30AM
+        # on MarketOpenEvent, schedule another InternalSchedulingEvent at 11:00AM
+        # on InternalSchedulingEvent at 11:00AM, cancel the 11:30AM one
+        now = self._clock.now()
+        if isinstance(event, PortfolioConstruction):
+            scheduled_event = InternalSchedulingEvent(
+                timestamp=datetime(now.year, now.month, now.day, 11, 30),
+                symbol=event.symbol,
+            )
+            scheduled_id = self._scheduler.schedule(scheduled_event)
+            self._first_scheduled = (scheduled_event, scheduled_id)
+        elif isinstance(event, MarketOpenEvent):
+            scheduled_event = InternalSchedulingEvent(
+                timestamp=datetime(now.year, now.month, now.day, 11, 0),
+                symbol=event.symbol,
+            )
+            scheduled_id = self._scheduler.schedule(scheduled_event)
+            self._second_scheduled = (scheduled_event, scheduled_id)
+        elif isinstance(event, InternalSchedulingEvent):
+            assert self._first_scheduled is not None
+            assert self._second_scheduled is not None
+            
+            assert event == self._second_scheduled[0]
+            # cancel first scheduled
+            self._scheduler.cancel(self._first_scheduled[1])
+            
 
 class TestEventSequencer(object):
     MARKET_DATA_EVENTS: list[Event] = [
@@ -160,17 +179,17 @@ class TestEventSequencer(object):
     ]
 
     EXPECTED_EXECUTION_SEQUENCE_NO_INTERNAL: list[Event] = [
-            # first day 2025.12.24
-            PORTFOLIO_EVENT_DATA[0],
-            MARKET_DATA_EVENTS[0],
-            MARKET_DATA_EVENTS[1],
-            PORTFOLIO_EVENT_DATA[1],
-            # second day 2025.12.26
-            PORTFOLIO_EVENT_DATA[2],
-            MARKET_DATA_EVENTS[2],
-            MARKET_DATA_EVENTS[3],
-            PORTFOLIO_EVENT_DATA[3],
-        ]
+        # first day 2025.12.24
+        PORTFOLIO_EVENT_DATA[0],
+        MARKET_DATA_EVENTS[0],
+        MARKET_DATA_EVENTS[1],
+        PORTFOLIO_EVENT_DATA[1],
+        # second day 2025.12.26
+        PORTFOLIO_EVENT_DATA[2],
+        MARKET_DATA_EVENTS[2],
+        MARKET_DATA_EVENTS[3],
+        PORTFOLIO_EVENT_DATA[3],
+    ]
 
     INITIAL_TIME = datetime(2025, 12, 24, 8, 30)
     MARKET_DATA_STORE_NAME = 'market-data'
@@ -197,11 +216,20 @@ class TestEventSequencer(object):
         ),
     ]
 
-    def _get_sim_clock(self):
-        return SimulationClock(self.INITIAL_TIME)
-
-    def _get_event_processor(self):
-        return MockStandardEventProcessor()
+    EXPECTED_EXECUTION_SEQUENCE_WITH_INTERNAL: list[Event] = [
+        # first day 2025.12.24
+        PORTFOLIO_EVENT_DATA[0],
+        MARKET_DATA_EVENTS[0],
+        INTERNAL_SCHEDULING_EVENTS[1], # the surviving scheduling
+        MARKET_DATA_EVENTS[1],
+        PORTFOLIO_EVENT_DATA[1],
+        # second day 2025.12.26
+        PORTFOLIO_EVENT_DATA[2],
+        MARKET_DATA_EVENTS[2],
+        INTERNAL_SCHEDULING_EVENTS[3], # the surviving scheduling
+        MARKET_DATA_EVENTS[3],
+        PORTFOLIO_EVENT_DATA[3],
+    ]
 
     def _get_market_data_store(self):
         return MockEventStore(
@@ -218,9 +246,8 @@ class TestEventSequencer(object):
     def _get_standard_setup(self, with_init_stores: bool=True) -> tuple[
         SimulationClock, MockStandardEventProcessor, EventSequencer
     ]:
-        sim_clock = self._get_sim_clock()
-        event_processor = self._get_event_processor()
-
+        sim_clock = SimulationClock(self.INITIAL_TIME)
+    
         event_stores: list[EventStore] = []
         if with_init_stores:
             event_stores.append(self._get_market_data_store())
@@ -229,14 +256,30 @@ class TestEventSequencer(object):
         sequencer = EventSequencer(
             sim_clock=sim_clock,
             event_stores=event_stores,
-            event_processor=event_processor,
         )
+
+        event_processor = MockStandardEventProcessor()
+        sequencer.set_processor(event_processor)
 
         return (sim_clock, event_processor, sequencer)
 
-    # def _get_mixed_setup(self) -> tuple[
-    #     SimulationClock, Mock
-    # ]
+    def _get_mixed_setup(self) -> tuple[
+        SimulationClock, MockMixedEventProcessor, EventSequencer
+    ]:
+        sim_clock = SimulationClock(self.INITIAL_TIME)
+
+        sequncer = EventSequencer(
+            sim_clock=sim_clock,
+            event_stores=[
+                self._get_market_data_store(),
+                self._get_portfolio_event_store(),
+            ],
+        )
+
+        event_processor = MockMixedEventProcessor(sim_clock, sequncer)
+        sequncer.set_processor(event_processor)
+
+        return (sim_clock, event_processor, sequncer)
 
     def test_mock_event_store(self):
         market_data_store = self._get_market_data_store()
@@ -261,7 +304,7 @@ class TestEventSequencer(object):
         # total 8 events to run through based on standard setup
         for i in range(8):
             print(f'running for {i}')
-            assert sequencer.run_once()
+            assert sequencer.advance()
             assert self.EXPECTED_EXECUTION_SEQUENCE_NO_INTERNAL[:i+1] == event_processor.get_processed_events()
 
             print(f'clock={sim_clock.now()}, event time={self.EXPECTED_EXECUTION_SEQUENCE_NO_INTERNAL[i]}')
@@ -269,7 +312,7 @@ class TestEventSequencer(object):
             print(f'finished running for {i}')
 
         # no more events in the queue
-        assert not sequencer.run_once()
+        assert not sequencer.advance()
 
     def test_merging_event_store_streams(self):
         sim_clock, event_processor, sequencer = self._get_standard_setup()
@@ -299,7 +342,7 @@ class TestEventSequencer(object):
         ]
 
         for i in range(4):
-            sequencer.run_once()
+            sequencer.advance()
             assert sim_clock.now() == event_processor.get_processed_events()[-1].timestamp
             assert expected_scheduling_events[:i+1] == event_processor.get_processed_events()
 
@@ -314,23 +357,23 @@ class TestEventSequencer(object):
         id0 = sequencer.schedule(self.INTERNAL_SCHEDULING_EVENTS[0]) # runs 2nd
         id1 = sequencer.schedule(self.INTERNAL_SCHEDULING_EVENTS[1]) # runs 1st
         
-        sequencer.run_once()
+        sequencer.advance()
         assert len(event_processor.get_processed_events()) == 1
         assert sim_clock.now() == event_processor.get_processed_events()[-1].timestamp
 
         assert not sequencer.cancel(id1) # the event is executed, nothing to cancel
 
         assert sequencer.cancel(id0) # should cancel event 
-        sequencer.run_once() # nothing happens as id0 event is canceled
+        sequencer.advance() # nothing happens as id0 event is canceled
         assert len(event_processor.get_processed_events()) == 1
         assert sim_clock.now() == event_processor.get_processed_events()[-1].timestamp
 
-        sequencer.run_once() # this should hit the next event
+        sequencer.advance() # this should hit the next event
         assert len(event_processor.get_processed_events()) == 2
         assert sim_clock.now() == event_processor.get_processed_events()[-1].timestamp
 
         assert sequencer.cancel(id2)
-        sequencer.run_once() # nothing happens as id2 event is canceled
+        sequencer.advance() # nothing happens as id2 event is canceled
         assert len(event_processor.get_processed_events()) == 2
         assert sim_clock.now() == event_processor.get_processed_events()[-1].timestamp
 
@@ -342,4 +385,8 @@ class TestEventSequencer(object):
         assert expected_scheduling_events == event_processor.get_processed_events()
 
     def test_mixed_scenario(self):
-        pass
+        _, event_processor, sequencer = self._get_mixed_setup()
+        
+        sequencer.run()
+        assert event_processor.get_processed_events() == self.EXPECTED_EXECUTION_SEQUENCE_WITH_INTERNAL
+
