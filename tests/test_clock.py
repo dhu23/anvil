@@ -1,6 +1,6 @@
 
 from datetime import datetime
-from mbte.clock import SimulationClock
+from anvil.clock import SimulationClock
 
 
 def test_simulation_clock():

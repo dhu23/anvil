@@ -1,8 +1,8 @@
 
 
 from abc import ABC, abstractmethod
-from mbte.event_processing import EventProcessor
-from mbte.events import Event, FillEvent, OrderEvent, SignalEvent
+from anvil.event_processing import EventProcessor
+from anvil.events import Event, FillEvent, OrderEvent, SignalEvent
 
 
 class Strategy(ABC):

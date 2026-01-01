@@ -1,4 +1,4 @@
-# mbte
+# Anvil (MBTE)
 Minimal Back-Testing Engine
 
 ## Core Concepts

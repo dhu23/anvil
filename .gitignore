@@ -144,6 +144,7 @@ ENV/
 env.bak/
 venv.bak/
 venv-mbte/
+venv-anvil/
 
 # Spyder project settings
 .spyderproject

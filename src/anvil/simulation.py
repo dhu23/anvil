@@ -2,7 +2,7 @@
 
 from typing import NamedTuple
 import numpy as np
-import mbte.gbm as gbm
+import anvil.gbm as gbm
 
 
 class SimulatedPrices(NamedTuple):

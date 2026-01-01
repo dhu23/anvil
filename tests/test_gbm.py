@@ -1,4 +1,4 @@
-from mbte import gbm
+from anvil import gbm
 import numpy as np
 import pytest
 import math

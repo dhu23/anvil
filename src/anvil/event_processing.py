@@ -3,10 +3,12 @@ Event Processing related implementations
 '''
 from datetime import datetime
 from abc import ABC, abstractmethod 
-from mbte.clock import SimulationClock
-from mbte.events import Event, InternalSchedulingEvent
 import heapq
 from typing import Generic, TypeVar, NamedTuple
+
+from anvil.clock import SimulationClock
+from anvil.events import Event, InternalSchedulingEvent
+
 
 K = TypeVar('K')
 V = TypeVar('V')
