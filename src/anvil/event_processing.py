@@ -122,7 +122,7 @@ class EventSequencer(EventScheduler):
     timestamp or anything that's comparable. 
 
     In addtion, EventSequencer also takes on the responsibility to manauge 
-    ad-hoc scheduling events that out-of-order scneario can happen due to 
+    ad-hoc scheduling events that out-of-order scenario can happen due to 
     strategy logic. 
     
     Illustration of Normal EventStore streams:
@@ -134,7 +134,7 @@ class EventSequencer(EventScheduler):
         MD-2: 2025-12-24 1:00PM  Market Close Price
     Portfolio Event Data:
         P-1: 2025-12-24 9:35AM  Build Portfolio
-        P-2: 2025-12-25 1:25PM  Liquidate Portfolio
+        P-2: 2025-12-24 12:25PM  Liquidate Portfolio
     The EventQueue object is responsible for generate the following sequence 
         MD-1, P-1, P-2, MD-2 
 
@@ -162,7 +162,9 @@ class EventSequencer(EventScheduler):
         self._event_processor: EventProcessor | None = None
 
         self._merger_queue = MbtePriorityQueue[datetime, EventStoreItem | ScheduledItem]()
+        # internal scheduling id sequence number for ad-hoc timer event
         self._internal_scheduling_id: int = 1
+        # active internal ad-hoc timer event id
         self._scheduled_id_set: set[int] = set()
         self._event_count: int = 0
 
